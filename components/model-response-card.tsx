@@ -2,9 +2,14 @@
 
 import * as React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2 } from "lucide-react";
+
+// This import is crucial for the math to actually look pretty!
+import "katex/dist/katex.min.css";
 
 interface ModelResponseCardProps {
   modelName: string;
@@ -42,6 +47,8 @@ export function ModelResponseCard({
           <div className="prose prose-sm dark:prose-invert max-w-none">
             {response ? (
               <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
                   p: ({ children }) => (
                     <p className="mb-4 last:mb-0">{children}</p>
@@ -118,4 +125,3 @@ export function ModelResponseCard({
     </Card>
   );
 }
-
