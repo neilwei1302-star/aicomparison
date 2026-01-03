@@ -6,7 +6,8 @@ export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, models } = await req.json();
+    // New: Destructure 'attachment' from the request body
+    const { prompt, models, attachment } = await req.json();
 
     if (!prompt || !models || !Array.isArray(models) || models.length === 0) {
       return new Response(
@@ -30,9 +31,25 @@ export async function POST(req: NextRequest) {
           // Start all model streams in parallel
           const streamPromises = models.map(async (model: string) => {
             try {
+              // Prepare input: if attachment exists, use 'messages' format for multimodal
+              const inputOptions = attachment
+                ? {
+                    messages: [
+                      {
+                        role: "user",
+                        content: [
+                          { type: "text", text: prompt },
+                          { type: "image", image: attachment }, // Vercel SDK handles the data URL
+                        ],
+                      },
+                    ],
+                  }
+                : { prompt }; // Fallback to simple prompt for text-only
+
+              // @ts-ignore - Dynamic property usage
               const result = await streamText({
                 model: openrouter(model),
-                prompt,
+                ...inputOptions,
               });
 
               return {
@@ -217,4 +234,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

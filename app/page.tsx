@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "@/components/model-selector";
 import { ModelResponseCard } from "@/components/model-response-card";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Paperclip, X } from "lucide-react";
 
 const defaultModels = [
   "anthropic/claude-3.5-sonnet",
@@ -20,6 +20,9 @@ interface Model {
 
 export default function Home() {
   const [prompt, setPrompt] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null); // New: File state
+  const fileInputRef = React.useRef<HTMLInputElement>(null); // New: Ref for hidden input
+
   const [models, setModels] = React.useState<Model[]>([]);
   const [selectedModels, setSelectedModels] =
     React.useState<string[]>(defaultModels);
@@ -76,6 +79,7 @@ export default function Home() {
     if (!prompt.trim() || selectedModels.length === 0) return;
 
     setIsLoading(true);
+    
     // Initialize responses
     const initialResponses: Record<
       string,
@@ -91,6 +95,16 @@ export default function Home() {
     setResponses(initialResponses);
 
     try {
+      // Process file if exists (Convert to Base64)
+      let attachmentData = null;
+      if (file) {
+        const reader = new FileReader();
+        attachmentData = await new Promise((resolve) => {
+          reader.onload = (e) => resolve(e.target?.result);
+          reader.readAsDataURL(file);
+        });
+      }
+
       const response = await fetch("/api/compare", {
         method: "POST",
         headers: {
@@ -99,6 +113,8 @@ export default function Home() {
         body: JSON.stringify({
           prompt,
           models: selectedModels,
+          attachment: attachmentData, // New: Sending the file data
+          fileName: file?.name // New: Sending the filename
         }),
       });
 
@@ -206,6 +222,12 @@ export default function Home() {
     return model?.name || modelId;
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -231,6 +253,42 @@ export default function Home() {
               className="min-h-[120px] resize-none"
               disabled={isLoading}
             />
+            
+            {/* New: File Upload Section */}
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/*,.pdf,.txt,.doc,.docx"
+              />
+              
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+                className="text-xs"
+              >
+                <Paperclip className="mr-2 h-3.5 w-3.5" />
+                {file ? "Change File" : "Attach Image/Doc"}
+              </Button>
+
+              {file && (
+                <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md text-xs">
+                  <span className="truncate max-w-[150px]">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFile(null)}
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
