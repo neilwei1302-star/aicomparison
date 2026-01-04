@@ -8,10 +8,10 @@ import { ModelResponseCard } from "@/components/model-response-card";
 import { Send, Loader2, Paperclip, X } from "lucide-react";
 
 const defaultModels = [
-  "anthropic/claude-3.5-sonnet",
-  "openai/gpt-4o",
-  "google/gemini-flash-1.5",
-  "meta-llama/llama-3.1-70b-instruct"
+  "openai/gpt-5.2",                    // The new Intelligence King
+  "google/gemini-3-flash-preview",     // The new Speed/Multimodal King
+  "anthropic/claude-3.5-sonnet",       // The Coding Reliability King
+  "meta-llama/llama-3.3-70b-instruct"  // The newest Open Source beast
 ];
 interface Model {
   id: string;
