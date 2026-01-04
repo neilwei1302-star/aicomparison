@@ -5,14 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ModelSelector } from "@/components/model-selector";
 import { ModelResponseCard } from "@/components/model-response-card";
-import { ChatHistorySidebar } from "@/components/chat-history-sidebar"; // Import the new sidebar
-import { Send, Loader2, Paperclip, X, History as HistoryIcon } from "lucide-react";
+import { ChatHistorySidebar } from "@/components/chat-history-sidebar";
+import { Send, Loader2, Paperclip, X, History as HistoryIcon, PlusCircle } from "lucide-react";
 
+// --- 2026 Flagship Lineup ---
 const defaultModels = [
-  "openai/gpt-5.2",
-  "google/gemini-3-flash-preview",
-  "anthropic/claude-3.5-sonnet",
-  "meta-llama/llama-3.3-70b-instruct"
+  "openai/gpt-5.2",                    // The Intelligence King
+  "google/gemini-3-flash-preview",     // The Speed & Multimodal King
+  "anthropic/claude-3.5-sonnet",       // The Coding Reliability King
+  "meta-llama/llama-3.3-70b-instruct"  // The latest Open Source Beast
 ];
 
 interface Model {
@@ -20,75 +21,42 @@ interface Model {
   name: string;
 }
 
+// A "Turn" is one User Prompt + All Model Responses to that prompt
+interface ChatTurn {
+  id: string;
+  userPrompt: string;
+  attachment?: string | null; // Base64 image
+  fileName?: string;
+  modelResponses: Record<string, {
+    text: string;
+    isLoading: boolean;
+    isComplete: boolean;
+    error?: string;
+  }>;
+}
+
 export default function Home() {
-  const [prompt, setPrompt] = React.useState("");
+  const [input, setInput] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null); 
   const fileInputRef = React.useRef<HTMLInputElement>(null); 
-  
-  // History State
-  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
 
+  // --- STATE: The Timeline of the Chat ---
+  const [chatTurns, setChatTurns] = React.useState<ChatTurn[]>([]);
+
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [models, setModels] = React.useState<Model[]>([]);
   const [selectedModels, setSelectedModels] = React.useState<string[]>(defaultModels);
-  
-  const [responses, setResponses] = React.useState<
-    Record<string, { text: string; isLoading: boolean; isComplete: boolean; error?: string }>
-  >({});
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  // --- AUTO-SAVE LOGIC ---
-  // This effect runs whenever responses update. 
-  // If all active models are finished, we save to local storage.
+  // Auto-scroll to bottom when chat updates
   React.useEffect(() => {
-    const activeModels = Object.keys(responses);
-    if (activeModels.length === 0) return;
-
-    // Check if everything is finished (not loading)
-    const allFinished = activeModels.every(id => responses[id].isComplete || responses[id].error);
-    
-    if (allFinished && prompt) {
-      saveToHistory();
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [responses]); // Run this check every time a response updates
+  }, [chatTurns]);
 
-  const saveToHistory = () => {
-    try {
-      // 1. Get existing history
-      const saved = localStorage.getItem("ai-comparison-history");
-      const history = saved ? JSON.parse(saved) : [];
-
-      // 2. Check if we already saved this exact prompt recently (prevent duplicates)
-      const lastItem = history[0];
-      if (lastItem && lastItem.prompt === prompt && JSON.stringify(lastItem.responses) === JSON.stringify(responses)) {
-        return; // Already saved
-      }
-
-      // 3. Create new item
-      const newItem = {
-        id: Date.now().toString(),
-        timestamp: Date.now(),
-        prompt: prompt,
-        responses: responses
-      };
-
-      // 4. Add to top of list and limit to 50 items
-      const newHistory = [newItem, ...history].slice(0, 50);
-      localStorage.setItem("ai-comparison-history", JSON.stringify(newHistory));
-    } catch (e) {
-      console.error("Save failed", e);
-    }
-  };
-
-  const handleHistorySelect = (item: any) => {
-    setPrompt(item.prompt);
-    setResponses(item.responses);
-    // We also need to make sure the models used in that history are selected
-    const modelsUsed = Object.keys(item.responses);
-    // Optional: Update selected models to match the history
-    // setSelectedModels(modelsUsed); 
-  };
-
+  // Fetch Model List
   React.useEffect(() => {
     async function fetchModels() {
       try {
@@ -102,42 +70,80 @@ export default function Home() {
     fetchModels();
   }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
+  // --- HELPER: Build Message History for a specific model ---
+  const buildHistoryForModel = (modelId: string, turns: ChatTurn[], currentPrompt: string, currentImage: string | null) => {
+    const messages = [];
 
-  const handleModelToggle = (modelId: string) => {
-    setSelectedModels((prev) =>
-      prev.includes(modelId)
-        ? prev.filter((id) => id !== modelId)
-        : [...prev, modelId]
-    );
+    // Add previous turns
+    for (const turn of turns) {
+      // 1. Add User Message
+      const userContent: any[] = [{ type: "text", text: turn.userPrompt }];
+      if (turn.attachment) {
+        userContent.push({ type: "image_url", image_url: { url: turn.attachment } });
+      }
+      messages.push({ role: "user", content: userContent });
+
+      // 2. Add THIS Model's previous response (if it exists)
+      if (turn.modelResponses[modelId]?.text) {
+        messages.push({ role: "assistant", content: turn.modelResponses[modelId].text });
+      }
+    }
+
+    // Add the NEW Prompt
+    const currentContent: any[] = [{ type: "text", text: currentPrompt }];
+    if (currentImage) {
+      currentContent.push({ type: "image_url", image_url: { url: currentImage } });
+    }
+    messages.push({ role: "user", content: currentContent });
+
+    return messages;
   };
 
   const handleSubmit = async () => {
-    if (!prompt.trim() || selectedModels.length === 0) return;
+    if (!input.trim() || selectedModels.length === 0) return;
 
-    setIsLoading(true);
-    setResponses({}); // Clear old responses
+    setIsGenerating(true);
+    const currentPrompt = input;
+    const currentFile = file;
     
-    // Initialize loading states
-    const initialResponses: Record<string, any> = {};
-    selectedModels.forEach(modelId => {
-      initialResponses[modelId] = { text: "", isLoading: true, isComplete: false };
-    });
-    setResponses(initialResponses);
+    // Clear Input immediately
+    setInput("");
+    setFile(null);
 
-    // Create an array of fetch promises
+    // Process File to Base64 (if any)
+    let base64File: string | null = null;
+    if (currentFile) {
+      const reader = new FileReader();
+      base64File = await new Promise((resolve) => {
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(currentFile);
+      });
+    }
+
+    // 1. Create a New Turn in the Chat State
+    const newTurnId = Date.now().toString();
+    const initialResponses: Record<string, any> = {};
+    selectedModels.forEach(id => {
+      initialResponses[id] = { text: "", isLoading: true, isComplete: false };
+    });
+
+    setChatTurns(prev => [...prev, {
+      id: newTurnId,
+      userPrompt: currentPrompt,
+      attachment: base64File,
+      fileName: currentFile?.name,
+      modelResponses: initialResponses
+    }]);
+
+    // 2. Fire off requests for EACH model
     const promises = selectedModels.map(async (modelId) => {
       try {
+        // Construct the history just for this model
+        const messages = buildHistoryForModel(modelId, chatTurns, currentPrompt, base64File);
+
         const formData = new FormData();
-        formData.append("prompt", prompt);
+        formData.append("messages", JSON.stringify(messages));
         formData.append("model", modelId);
-        if (file) {
-           formData.append("file", file);
-        }
 
         const response = await fetch("/api/compare", {
           method: "POST",
@@ -162,91 +168,179 @@ export default function Home() {
               try {
                 const data = JSON.parse(line.slice(6));
                 
-                setResponses(prev => ({
-                  ...prev,
-                  [modelId]: {
-                    text: (prev[modelId]?.text || "") + (data.content || ""),
-                    isLoading: true,
-                    isComplete: false
-                  }
+                // Update the specific model's response in the specific turn
+                setChatTurns(prev => prev.map(turn => {
+                  if (turn.id !== newTurnId) return turn;
+                  return {
+                    ...turn,
+                    modelResponses: {
+                      ...turn.modelResponses,
+                      [modelId]: {
+                        ...turn.modelResponses[modelId],
+                        text: (turn.modelResponses[modelId]?.text || "") + (data.content || ""),
+                        isLoading: true,
+                        isComplete: false
+                      }
+                    }
+                  };
                 }));
-              } catch (e) {
-                console.error("Parse error", e);
-              }
+              } catch (e) { console.error(e); }
             }
           }
         }
 
         // Mark as complete
-        setResponses(prev => ({
-          ...prev,
-          [modelId]: {
-            ...prev[modelId],
-            isLoading: false,
-            isComplete: true
-          }
+        setChatTurns(prev => prev.map(turn => {
+          if (turn.id !== newTurnId) return turn;
+          return {
+            ...turn,
+            modelResponses: {
+              ...turn.modelResponses,
+              [modelId]: { ...turn.modelResponses[modelId], isLoading: false, isComplete: true }
+            }
+          };
         }));
 
       } catch (error: any) {
-        setResponses(prev => ({
-          ...prev,
-          [modelId]: {
-            text: "",
-            isLoading: false,
-            isComplete: true,
-            error: error.message || "Failed to generate response"
-          }
+        // Handle Error
+        setChatTurns(prev => prev.map(turn => {
+          if (turn.id !== newTurnId) return turn;
+          return {
+            ...turn,
+            modelResponses: {
+              ...turn.modelResponses,
+              [modelId]: {
+                ...turn.modelResponses[modelId],
+                isLoading: false,
+                isComplete: true,
+                error: error.message || "Error"
+              }
+            }
+          };
         }));
       }
     });
 
     await Promise.all(promises);
-    setIsLoading(false);
+    setIsGenerating(false);
+  };
+
+  // --- Handlers ---
+  const handleHistorySelect = (item: any) => {
+    // For now, we just load the last prompt to start a new chat
+    setChatTurns([]); 
+    setInput(item.prompt);
+  };
+
+  const handleModelToggle = (modelId: string) => {
+    setSelectedModels((prev) =>
+      prev.includes(modelId) ? prev.filter((id) => id !== modelId) : [...prev, modelId]
+    );
+  };
+
+  const handleClearChat = () => {
+    if(confirm("Start a new conversation?")) {
+      setChatTurns([]);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFile(e.target.files[0]);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="flex flex-col h-screen bg-background">
       {/* HISTORY SIDEBAR */}
       <ChatHistorySidebar 
         isOpen={isHistoryOpen} 
         onClose={() => setIsHistoryOpen(false)}
         onSelectChat={handleHistorySelect}
-        currentPrompt={prompt}
+        currentPrompt={input}
       />
 
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight mb-2">AI Model Comparison</h1>
-            <p className="text-muted-foreground">Compare responses from top LLMs side-by-side</p>
-          </div>
-          <div className="flex gap-2">
-             <Button 
-                variant="outline" 
-                onClick={() => setIsHistoryOpen(true)}
-                className="gap-2"
-              >
-                <HistoryIcon className="h-4 w-4" />
-                History
-             </Button>
-             <ModelSelector
-              models={models}
-              selectedModels={selectedModels}
-              onModelToggle={handleModelToggle}
-            />
-          </div>
+      {/* --- TOP BAR --- */}
+      <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur sticky top-0 z-10">
+        <div className="flex items-center gap-2">
+           <Button variant="ghost" size="icon" onClick={() => setIsHistoryOpen(true)}>
+             <HistoryIcon className="h-5 w-5" />
+           </Button>
+           <h1 className="text-xl font-bold hidden md:block">AI Comparison</h1>
         </div>
+        
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleClearChat} disabled={chatTurns.length === 0}>
+             <PlusCircle className="mr-2 h-4 w-4" /> New Chat
+          </Button>
+          <ModelSelector
+            models={models}
+            selectedModels={selectedModels}
+            onModelToggle={handleModelToggle}
+          />
+        </div>
+      </header>
 
-        {/* INPUT SECTION */}
-        <div className="space-y-4 max-w-3xl mx-auto">
-          <div className="relative">
-            <Textarea
-              placeholder="Enter your prompt here..."
-              className="min-h-[100px] pr-24 resize-none text-lg p-4"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+      {/* --- CHAT AREA (Scrollable) --- */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-8">
+        {chatTurns.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-8 text-muted-foreground">
+             <div className="max-w-md space-y-4">
+               <h2 className="text-2xl font-semibold text-foreground">Compare AI Models</h2>
+               <p>Select your models, type a prompt, and see how they answer side-by-side.</p>
+             </div>
+          </div>
+        ) : (
+          chatTurns.map((turn) => (
+            <div key={turn.id} className="max-w-7xl mx-auto space-y-6">
+              
+              {/* USER MESSAGE */}
+              <div className="flex justify-end">
+                <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-tr-sm max-w-[85%] md:max-w-[70%] text-sm md:text-base shadow-sm">
+                   {turn.attachment && (
+                     <div className="mb-2 rounded overflow-hidden border border-white/20">
+                       <img src={turn.attachment} alt="User attachment" className="max-h-40 object-cover" />
+                     </div>
+                   )}
+                   <p className="whitespace-pre-wrap">{turn.userPrompt}</p>
+                </div>
+              </div>
+
+              {/* MODEL RESPONSES GRID */}
+              <div className={`grid gap-4 grid-cols-1 md:grid-cols-${Math.min(selectedModels.length, 2)} lg:grid-cols-${Math.min(selectedModels.length, 3)}`}>
+                 {selectedModels.map(modelId => {
+                   const response = turn.modelResponses[modelId];
+                   if (!response) return null;
+                   return (
+                     <div key={modelId} className="min-h-[200px]">
+                       <ModelResponseCard 
+                          modelName={models.find(m => m.id === modelId)?.name || modelId}
+                          response={response.text}
+                          isLoading={response.isLoading}
+                          isComplete={response.isComplete}
+                          error={response.error}
+                       />
+                     </div>
+                   );
+                 })}
+              </div>
+
+              {/* DIVIDER */}
+              <div className="h-px bg-border w-full my-8 opacity-50" />
+            </div>
+          ))
+        )}
+        <div ref={scrollRef} />
+      </div>
+
+      {/* --- INPUT AREA (Fixed Bottom) --- */}
+      <div className="p-4 border-t bg-background">
+        <div className="max-w-4xl mx-auto relative">
+           <Textarea
+              placeholder="Ask a follow-up..."
+              className="min-h-[60px] pr-24 resize-none rounded-xl p-4 shadow-sm"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -254,71 +348,26 @@ export default function Home() {
                 }
               }}
             />
-            
-            {/* FILE UPLOAD BADGE */}
+
             {file && (
-              <div className="absolute left-4 bottom-4 flex items-center gap-2 bg-muted px-2 py-1 rounded-md text-xs">
+              <div className="absolute left-4 bottom-16 flex items-center gap-2 bg-muted px-2 py-1 rounded-md text-xs shadow-sm border">
                 <span className="truncate max-w-[150px]">{file.name}</span>
-                <button 
-                  onClick={() => setFile(null)}
-                  className="hover:text-destructive"
-                >
+                <button onClick={() => setFile(null)} className="hover:text-destructive">
                   <X className="h-3 w-3" />
                 </button>
               </div>
             )}
 
-            <div className="absolute bottom-4 right-4 flex gap-2">
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                className="hidden" 
-                onChange={handleFileSelect}
-              />
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                onClick={() => fileInputRef.current?.click()}
-                className={file ? "text-primary bg-primary/10" : "text-muted-foreground"}
-              >
-                <Paperclip className="h-5 w-5" />
-              </Button>
-              <Button 
-                onClick={handleSubmit} 
-                disabled={isLoading || !prompt.trim()}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
+            <div className="absolute bottom-3 right-3 flex gap-2">
+               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+               <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} className={file ? "text-primary" : "text-muted-foreground"}>
+                 <Paperclip className="h-5 w-5" />
+               </Button>
+               <Button onClick={handleSubmit} disabled={isGenerating || !input.trim()} size="icon">
+                 {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+               </Button>
             </div>
-          </div>
         </div>
-
-        {/* RESULTS GRID */}
-        {Object.keys(responses).length > 0 && (
-          <div className={`grid gap-6 grid-cols-1 md:grid-cols-${Math.min(selectedModels.length, 3)}`}>
-            {selectedModels.map((modelId) => {
-              const response = responses[modelId];
-              if (!response) return null;
-              
-              return (
-                <div key={modelId} className="min-h-[400px]">
-                  <ModelResponseCard
-                    modelName={models.find(m => m.id === modelId)?.name || modelId}
-                    response={response.text}
-                    isLoading={response.isLoading}
-                    isComplete={response.isComplete}
-                    error={response.error}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
     </div>
   );
