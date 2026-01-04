@@ -6,39 +6,44 @@ const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
   defaultHeaders: {
-    "HTTP-Referer": "https://aicomparison.app", // Optional: your site URL
-    "X-Title": "AI Comparison", // Optional: your site name
+    "HTTP-Referer": "https://aicomparison.app",
+    "X-Title": "AI Comparison",
   },
 });
 
 export async function POST(req: Request) {
   try {
-    // 1. Parse the new "FormData" format instead of JSON
     const formData = await req.formData();
-    const prompt = formData.get("prompt") as string;
-    const model = formData.get("model") as string;
     
-    // (Optional: We can extract the file here later if needed)
-    // const file = formData.get("file"); 
+    // We try to get 'messages' first (New Chat format)
+    const messagesJson = formData.get("messages") as string;
+    const model = formData.get("model") as string;
 
-    if (!prompt || !model) {
-      return new Response("Missing prompt or model", { status: 400 });
+    if (!model) {
+      return new Response("Missing model", { status: 400 });
     }
 
-    // 2. Call the API with your powerful models
+    let messages;
+    if (messagesJson) {
+      messages = JSON.parse(messagesJson);
+    } else {
+      // Fallback: If no history, just use the prompt
+      const prompt = formData.get("prompt") as string;
+      if (!prompt) return new Response("Missing prompt", { status: 400 });
+      messages = [{ role: "user", content: prompt }];
+    }
+
     const response = await openai.chat.completions.create({
       model: model,
-      messages: [{ role: "user", content: prompt }],
-      stream: true, // Keep streaming on
+      messages: messages,
+      stream: true,
     });
 
-    // 3. Stream the response back to the frontend
     const stream = new ReadableStream({
       async start(controller) {
         for await (const chunk of response) {
           const content = chunk.choices[0]?.delta?.content || "";
           if (content) {
-            // Send data in a format the frontend expects
             controller.enqueue(
               new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`)
             );
