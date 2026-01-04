@@ -26,6 +26,16 @@ export function ModelResponseCard({
   isComplete,
   error,
 }: ModelResponseCardProps) {
+  
+  // 1. THIS IS THE HELPER FUNCTION (Correctly placed here!)
+  const formatMath = (text: string) => {
+    return text
+      .replace(/\\\[/g, '$$$$') 
+      .replace(/\\\]/g, '$$$$') 
+      .replace(/\\\(/g, '$$')   
+      .replace(/\\\)/g, '$$');  
+  };
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
@@ -103,7 +113,8 @@ export function ModelResponseCard({
                   ),
                 }}
               >
-                {response}
+                {/* 2. USING THE HELPER FUNCTION HERE */}
+                {formatMath(response)}
               </ReactMarkdown>
             ) : (
               <p className="text-muted-foreground">Waiting for response...</p>
