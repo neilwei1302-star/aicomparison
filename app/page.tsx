@@ -311,10 +311,17 @@ export default function Home() {
       {/* --- HEADER --- */}
       <header className="flex flex-col md:flex-row items-center justify-between p-4 border-b bg-background/95 backdrop-blur sticky top-0 z-10 gap-4">
         <div className="flex items-center gap-2 w-full md:w-auto overflow-hidden">
-           <Button variant="ghost" size="icon" onClick={() => setIsHistoryOpen(true)} className="shrink-0">
-             <HistoryIcon className="h-5 w-5" />
+           {/* HISTORY BUTTON WITH CAPTION */}
+           <Button 
+             variant="ghost" 
+             onClick={() => setIsHistoryOpen(true)} 
+             className="shrink-0 gap-2 px-2"
+           >
+             <HistoryIcon className="h-6 w-6" />
+             <span className="font-semibold text-base">History</span>
            </Button>
-           <h1 className="text-xl font-bold hidden md:block mr-2 shrink-0">AI Comparison</h1>
+
+           <h1 className="text-xl font-bold hidden md:block mr-2 shrink-0 border-l pl-4 ml-2">AI Comparison</h1>
            
            {/* SELECTED MODELS DISPLAY (Scrollable) */}
            <div className="flex gap-2 overflow-x-auto no-scrollbar mask-gradient flex-1 items-center">
