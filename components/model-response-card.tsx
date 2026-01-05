@@ -42,12 +42,12 @@ export function ModelResponseCard({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3 px-4">
         <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{modelName}</CardTitle>
         
-        {/* REPLY BUTTON: Only shows when response is done */}
+        {/* REPLY BUTTON: Always visible when response is done */}
         {isComplete && !error && onReply && (
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+            className="h-6 w-6" 
             onClick={onReply}
             title={`Reply to ${modelName}`}
           >
