@@ -47,6 +47,50 @@ export default function Home() {
   const [selectedModels, setSelectedModels] = React.useState<string[]>(defaultModels);
   const [isGenerating, setIsGenerating] = React.useState(false);
 
+  // --- AUTO-SAVE LOGIC ---
+  React.useEffect(() => {
+    // Only save if we have a chat and we aren't currently generating (to avoid spamming storage)
+    if (chatTurns.length > 0 && !isGenerating) {
+      saveToHistory();
+    }
+  }, [chatTurns, isGenerating]);
+
+  const saveToHistory = () => {
+    try {
+      const saved = localStorage.getItem("ai-comparison-history");
+      let history = saved ? JSON.parse(saved) : [];
+
+      // We use the ID of the FIRST turn as the unique ID for this whole conversation
+      const conversationId = chatTurns[0].id;
+      
+      // Check if this conversation already exists in history
+      const existingIndex = history.findIndex((item: any) => item.id === conversationId);
+
+      const historyItem = {
+        id: conversationId,
+        timestamp: Date.now(),
+        // Title is the first prompt
+        prompt: chatTurns[0].userPrompt, 
+        // We save the FULL chat turns now
+        turns: chatTurns, 
+        // Keep 'responses' for backward compatibility with the sidebar preview
+        responses: chatTurns[chatTurns.length - 1].modelResponses 
+      };
+
+      if (existingIndex >= 0) {
+        // Update existing entry
+        history[existingIndex] = historyItem;
+      } else {
+        // Add new entry to the top
+        history = [historyItem, ...history].slice(0, 50);
+      }
+
+      localStorage.setItem("ai-comparison-history", JSON.stringify(history));
+    } catch (e) {
+      console.error("Save failed", e);
+    }
+  };
+
   React.useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
@@ -73,7 +117,6 @@ export default function Home() {
     // Add previous turns
     for (const turn of turns) {
       let userContent: any;
-      // Smart Formatting: Only send object if image exists
       if (turn.attachment) {
         userContent = [
           { type: "text", text: turn.userPrompt },
@@ -221,8 +264,14 @@ export default function Home() {
   };
 
   const handleHistorySelect = (item: any) => {
-    setChatTurns([]); 
-    setInput(item.prompt);
+    // If the saved item has the new "turns" format, use it.
+    if (item.turns) {
+       setChatTurns(item.turns);
+    } else {
+       // Fallback for old history items
+       setChatTurns([]);
+       setInput(item.prompt);
+    }
   };
 
   const handleModelToggle = (modelId: string) => {
