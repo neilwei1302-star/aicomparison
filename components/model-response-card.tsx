@@ -6,9 +6,9 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageSquarePlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-// This import is crucial for the math to actually look pretty!
 import "katex/dist/katex.min.css";
 
 interface ModelResponseCardProps {
@@ -17,6 +17,7 @@ interface ModelResponseCardProps {
   isLoading: boolean;
   isComplete: boolean;
   error?: string;
+  onReply?: () => void;
 }
 
 export function ModelResponseCard({
@@ -25,9 +26,9 @@ export function ModelResponseCard({
   isLoading,
   isComplete,
   error,
+  onReply,
 }: ModelResponseCardProps) {
   
-  // 1. THIS IS THE HELPER FUNCTION (Correctly placed here!)
   const formatMath = (text: string) => {
     return text
       .replace(/\\\[/g, '$$$$') 
@@ -37,18 +38,32 @@ export function ModelResponseCard({
   };
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold">{modelName}</CardTitle>
+    <Card className="h-full flex flex-col group">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3 px-4">
+        <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{modelName}</CardTitle>
+        
+        {/* REPLY BUTTON: Only shows when response is done */}
+        {isComplete && !error && onReply && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+            onClick={onReply}
+            title={`Reply to ${modelName}`}
+          >
+            <MessageSquarePlus className="h-4 w-4 text-primary" />
+          </Button>
+        )}
       </CardHeader>
-      <CardContent className="flex-1 overflow-auto">
+      
+      <CardContent className="flex-1 overflow-auto p-4 pt-0">
         {error ? (
           <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4">
             <p className="text-sm font-medium text-destructive mb-2">Error</p>
             <p className="text-sm text-destructive/80">{error}</p>
           </div>
         ) : isLoading && !response ? (
-          <div className="space-y-2">
+          <div className="space-y-2 pt-2">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-5/6" />
             <Skeleton className="h-4 w-4/6" />
@@ -61,36 +76,36 @@ export function ModelResponseCard({
                 rehypePlugins={[rehypeKatex]}
                 components={{
                   p: ({ children }) => (
-                    <p className="mb-4 last:mb-0">{children}</p>
+                    <p className="mb-4 last:mb-0 leading-relaxed">{children}</p>
                   ),
                   code: ({ children, className }) => {
                     const isInline = !className;
                     return isInline ? (
-                      <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">
+                      <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">
                         {children}
                       </code>
                     ) : (
-                      <code className="block bg-muted p-4 rounded-lg overflow-x-auto">
+                      <code className="block bg-muted p-4 rounded-lg overflow-x-auto text-xs sm:text-sm my-4 border">
                         {children}
                       </code>
                     );
                   },
                   pre: ({ children }) => (
-                    <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4">
+                    <pre className="bg-muted/50 p-0 rounded-lg overflow-hidden mb-4 border">
                       {children}
                     </pre>
                   ),
                   ul: ({ children }) => (
-                    <ul className="list-disc list-inside mb-4 space-y-1">
+                    <ul className="list-disc list-outside ml-4 mb-4 space-y-1">
                       {children}
                     </ul>
                   ),
                   ol: ({ children }) => (
-                    <ol className="list-decimal list-inside mb-4 space-y-1">
+                    <ol className="list-decimal list-outside ml-4 mb-4 space-y-1">
                       {children}
                     </ol>
                   ),
-                  li: ({ children }) => <li className="ml-4">{children}</li>,
+                  li: ({ children }) => <li className="pl-1">{children}</li>,
                   h1: ({ children }) => (
                     <h1 className="text-2xl font-bold mb-4 mt-6 first:mt-0">
                       {children}
@@ -107,27 +122,21 @@ export function ModelResponseCard({
                     </h3>
                   ),
                   blockquote: ({ children }) => (
-                    <blockquote className="border-l-4 border-muted-foreground/50 pl-4 italic my-4">
+                    <blockquote className="border-l-4 border-primary/20 pl-4 italic my-4 text-muted-foreground">
                       {children}
                     </blockquote>
                   ),
                 }}
               >
-                {/* 2. USING THE HELPER FUNCTION HERE */}
                 {formatMath(response)}
               </ReactMarkdown>
             ) : (
-              <p className="text-muted-foreground">Waiting for response...</p>
+              <p className="text-muted-foreground italic">Waiting for response...</p>
             )}
             {isLoading && response && (
-              <div className="flex items-center gap-2 mt-4 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Streaming...</span>
-              </div>
-            )}
-            {isComplete && response && (
-              <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
-                Response complete
+              <div className="flex items-center gap-2 mt-4 text-muted-foreground animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span className="text-xs uppercase tracking-wider font-medium">Generating...</span>
               </div>
             )}
           </div>
