@@ -11,10 +11,10 @@ import { Badge } from "@/components/ui/badge";
 
 // --- 2026 Flagship Lineup ---
 const defaultModels = [
-  "openai/gpt-5.2",
-  "google/gemini-3-flash-preview",
-  "anthropic/claude-3.5-sonnet",
-  "meta-llama/llama-3.3-70b-instruct"
+  "openai/gpt-5.6-terra",
+  "google/gemini-3.7-flash",
+  "anthropic/claude-sonnet-5",
+  "x-ai/grok-4.6"
 ];
 
 interface Model {
