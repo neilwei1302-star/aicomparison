@@ -80,11 +80,7 @@ pnpm dev
 
 ## Default Models
 
-The app comes with these models pre-selected:
-- `anthropic/claude-3.5-sonnet`
-- `openai/gpt-4o`
-- `google/gemini-1.5-flash-latest`
-- `meta-llama/llama-3.1-70b-instruct`
+The app comes with the best updated frontier models preselected.
 
 You can change the default models by editing `DEFAULT_MODELS` in `app/page.tsx`.
 
